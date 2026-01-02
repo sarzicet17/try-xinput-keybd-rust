@@ -1,8 +1,11 @@
+use std::thread::sleep;
+use std::time::{Duration, Instant};
+
 use windows_sys::Win32::{
     UI::Input::{
         KeyboardAndMouse::{
             SendInput, INPUT, INPUT_KEYBOARD, KEYBDINPUT,
-            KEYEVENTF_KEYUP,
+            KEYEVENTF_KEYUP, VK_X,
         },
         XboxController::{
             XInputGetState, XINPUT_STATE, XINPUT_GAMEPAD_B,
@@ -12,11 +15,13 @@ use windows_sys::Win32::{
 };
 
 /// ボタンの状態
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum ButtonState {
     Released,
     Pressed,
 }
+
+const POLL_INTERVAL: Duration = Duration::from_millis(5);
 
 fn main() {
     println!("XInput to Keyboard converter started");
@@ -24,62 +29,60 @@ fn main() {
     println!("Press Ctrl+C to exit");
 
     let mut prev_button_state = ButtonState::Released;
+    let mut last_poll = Instant::now();
+    let mut error_shown = false;
 
     loop {
-        // XInputからコントローラーの状態を取得
+        // ポーリング間隔制御（Instantベース）
+        let now = Instant::now();
+        if now.duration_since(last_poll) < POLL_INTERVAL {
+            sleep(Duration::from_millis(1));
+            continue;
+        }
+        last_poll = now;
+
+        // XInput 状態取得
         let mut xinput_state: XINPUT_STATE = unsafe { std::mem::zeroed() };
         let result = unsafe { XInputGetState(0, &mut xinput_state) };
 
-        if result == 0 {  // ERROR_SUCCESS
-            // Bボタンの状態を確認
-            let b_button_pressed = (xinput_state.Gamepad.wButtons & XINPUT_GAMEPAD_B) != 0;
-            
-            let current_button_state = if b_button_pressed {
+        if result == 0 {
+            error_shown = false;
+
+            let pressed =
+                (xinput_state.Gamepad.wButtons & XINPUT_GAMEPAD_B) != 0;
+
+            let current_button_state = if pressed {
                 ButtonState::Pressed
             } else {
                 ButtonState::Released
             };
 
-            // 状態遷移とキーイベント送信
+            // 状態遷移 FSM
             match (prev_button_state, current_button_state) {
                 (ButtonState::Released, ButtonState::Pressed) => {
-                    // ボタン押下開始 -> KeyDown送信
-                    send_key_event(0x58, false);  // 0x58 = 'X' key
-                    println!("Button pressed - Sending KeyDown (X)");
+                    send_key_event(VK_X as u16, false);
+                    println!("Button pressed -> KeyDown (X)");
                 }
                 (ButtonState::Pressed, ButtonState::Released) => {
-                    // ボタン解放 -> KeyUp送信
-                    send_key_event(0x58, true);  // 0x58 = 'X' key
-                    println!("Button released - Sending KeyUp (X)");
+                    send_key_event(VK_X as u16, true);
+                    println!("Button released -> KeyUp (X)");
                 }
-                _ => {
-                    // 状態変化なし -> 何もしない
-                }
+                _ => {}
             }
 
             prev_button_state = current_button_state;
-        } else {
-            // コントローラーが接続されていない場合
-            // エラーメッセージは最初の1回だけ表示
-            static mut ERROR_SHOWN: bool = false;
-            unsafe {
-                if !ERROR_SHOWN {
-                    println!("XInput controller not found (error code: {})", result);
-                    ERROR_SHOWN = true;
-                }
-            }
+        } else if !error_shown {
+            println!("XInput controller not found (error code: {})", result);
+            error_shown = true;
         }
-
-        // 5ms待機
-        unsafe { Sleep(5) };
     }
 }
 
-/// キーイベントを送信
+/// キーイベント送信
 fn send_key_event(virtual_key: u16, is_key_up: bool) {
     let mut input: INPUT = unsafe { std::mem::zeroed() };
     input.r#type = INPUT_KEYBOARD;
-    
+
     unsafe {
         input.Anonymous.ki = KEYBDINPUT {
             wVk: virtual_key,
@@ -88,10 +91,15 @@ fn send_key_event(virtual_key: u16, is_key_up: bool) {
             time: 0,
             dwExtraInfo: 0,
         };
-        
-        let result = SendInput(1, &input, std::mem::size_of::<INPUT>() as i32);
-        if result != 1 {
-            eprintln!("Failed to send input: {}", result);
+
+        let sent = SendInput(
+            1,
+            &input,
+            std::mem::size_of::<INPUT>() as i32,
+        );
+
+        if sent != 1 {
+            eprintln!("SendInput failed");
         }
     }
 }
