@@ -1,40 +1,41 @@
-name: Rust / Windows Build
+name: Windows Release Build
 
+# Release が「Published」されたときのみ実行
 on:
-  push:
-    branches: [ main ]
-  pull_request:
-    branches: [ main ]
   release:
     types: [published]
 
+# 必要最小限の権限のみ
+permissions:
+  contents: write   # Release asset upload に必須
+
 jobs:
   build-windows:
+    name: Build and attach Windows exe
     runs-on: windows-latest
 
+    # 管理者の明示承認が必要
+    environment: release
+
     steps:
-    - name: Checkout repository
-      uses: actions/checkout@v4
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
-    - name: Install Rust toolchain
-      uses: actions-rs/toolchain@v1
-      with:
-        profile: minimal
-        toolchain: stable
+      - name: Install Rust toolchain
+        uses: actions-rs/toolchain@v1
+        with:
+          profile: minimal
+          toolchain: stable
 
-    - name: Build (debug)
-      run: cargo build --verbose
+      - name: Build (release)
+        run: cargo build --release --verbose
 
-    - name: Build (release)
-      run: cargo build --release --verbose
-
-    - name: Upload release asset
-      if: github.event_name == 'release'
-      uses: actions/upload-release-asset@v1
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      with:
-        upload_url: ${{ github.event.release.upload_url }}
-        asset_path: target/release/xinput_keybd.exe
-        asset_name: xinput_keybd.exe
-        asset_content_type: application/octet-stream
+      - name: Upload exe to GitHub Release
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ github.event.release.upload_url }}
+          asset_path: target/release/xinput_keybd.exe
+          asset_name: xinput_keybd.exe
+          asset_content_type: application/octet-stream
