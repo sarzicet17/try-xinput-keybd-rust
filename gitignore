@@ -1,0 +1,18 @@
+# Gitで管理しないファイル
+/target/
+Cargo.lock
+
+# Windows固有
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+# エディタ関連
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS固有
+.DS_Store
