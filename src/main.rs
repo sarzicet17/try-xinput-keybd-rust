@@ -2,10 +2,10 @@ use windows_sys::Win32::{
     UI::Input::{
         KeyboardAndMouse::{
             SendInput, INPUT, INPUT_KEYBOARD, KEYBDINPUT,
-            KEYEVENTF_KEYUP, VK_SPACE,
+            KEYEVENTF_KEYUP,
         },
         XboxController::{
-            XInputGetState, XINPUT_STATE, XINPUT_GAMEPAD_A,
+            XInputGetState, XINPUT_STATE, XINPUT_GAMEPAD_B,
         },
     },
     System::Threading::Sleep,
@@ -20,7 +20,7 @@ enum ButtonState {
 
 fn main() {
     println!("XInput to Keyboard converter started");
-    println!("Press Xbox Controller A button to send SPACE key");
+    println!("Press Xbox Controller B button to send X key");
     println!("Press Ctrl+C to exit");
 
     let mut prev_button_state = ButtonState::Released;
@@ -31,10 +31,10 @@ fn main() {
         let result = unsafe { XInputGetState(0, &mut xinput_state) };
 
         if result == 0 {  // ERROR_SUCCESS
-            // Aボタンの状態を確認
-            let a_button_pressed = (xinput_state.Gamepad.wButtons & XINPUT_GAMEPAD_A) != 0;
+            // Bボタンの状態を確認
+            let b_button_pressed = (xinput_state.Gamepad.wButtons & XINPUT_GAMEPAD_B) != 0;
             
-            let current_button_state = if a_button_pressed {
+            let current_button_state = if b_button_pressed {
                 ButtonState::Pressed
             } else {
                 ButtonState::Released
@@ -44,13 +44,13 @@ fn main() {
             match (prev_button_state, current_button_state) {
                 (ButtonState::Released, ButtonState::Pressed) => {
                     // ボタン押下開始 -> KeyDown送信
-                    send_key_event(VK_SPACE, false);
-                    println!("Button pressed - Sending KeyDown");
+                    send_key_event(0x58, false);  // 0x58 = 'X' key
+                    println!("Button pressed - Sending KeyDown (X)");
                 }
                 (ButtonState::Pressed, ButtonState::Released) => {
                     // ボタン解放 -> KeyUp送信
-                    send_key_event(VK_SPACE, true);
-                    println!("Button released - Sending KeyUp");
+                    send_key_event(0x58, true);  // 0x58 = 'X' key
+                    println!("Button released - Sending KeyUp (X)");
                 }
                 _ => {
                     // 状態変化なし -> 何もしない
